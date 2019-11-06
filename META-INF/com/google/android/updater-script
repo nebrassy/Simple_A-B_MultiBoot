@@ -1,0 +1,83 @@
+#MAGISK
+##########################################################################################
+#
+# Magisk Flash Script (updater-script)
+# by topjohnwu
+#
+# This script will detect, construct the environment for Magisk
+# It will then call boot_patch.sh to patch the boot image
+#
+##########################################################################################
+# Preparation
+##########################################################################################
+
+COMMONDIR=$INSTALLER/common
+
+# Default permissions
+umask 022
+
+OUTFD=$2
+ZIP=$3
+
+if [ ! -f $COMMONDIR/util_functions.sh ]; then
+  echo "! Unable to extract zip file!"
+  exit 1
+fi
+
+# Load utility fuctions
+. $COMMONDIR/util_functions.sh
+
+setup_flashable
+
+##########################################################################################
+# Detection
+##########################################################################################
+
+ui_print "*************************************************"
+ui_print "*             Simple A/B MultiBoot              *"
+ui_print "*                  By Nebrassy                  *"
+ui_print "*************************************************"
+
+is_mounted /data || mount /data || is_mounted /cache || mount /cache
+mount_partitions
+check_data
+
+
+
+##########################################################################################
+# Fstab patches
+##########################################################################################
+
+if ! grep -Fxq "#abmultiboot" /system/vendor/etc/fstab.qcom
+then
+ui_print "Patching fstab..."
+sed -i "s/ \/data / \/realdata /g" /system/vendor/etc/fstab.qcom
+sed -i "\$a#abmultiboot" /system/vendor/etc/fstab.qcom
+sed -i "\$a/realdata/media/multiboot                    /data           none   bind                                                        wait" /system/vendor/etc/fstab.qcom
+sed -i "\$a/realdata/media                          /data/media           none   bind                                                        wait" /system/vendor/etc/fstab.qcom
+else
+ui_print "fstab already patched, nothing to do..."
+fi
+
+if ! grep -Fxq "#abmultiboot" /system/vendor/etc/fstab.qcom
+then
+abort "failed patching fstab, aborting... "
+fi
+
+#make sure the required directories exists
+mkdir /data/media/multiboot
+chown system:system /data/media/multiboot
+chmod 771 /data/media/multiboot
+mkdir /system_root/realdata
+chown system:system /system_root/realdata
+chmod 771 /system_root/realdata
+ui_print "Done, make sure to flash Kernel Sepolicy Patcher and switch to permissive"
+
+
+cd /
+# Cleanups
+recovery_cleanup
+rm -rf $TMPDIR
+
+ui_print "- Done"
+exit 0
